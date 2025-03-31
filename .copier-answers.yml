@@ -1,0 +1,15 @@
+# Changes here will be overwritten by Copier
+_commit: v0.1.5
+_src_path: gh:ninanor/python-template
+author_name: benjamin cretois
+debug: true
+default_branch_name: main
+docker: true
+email: benjamin.cretois@nina.no
+notebook: false
+project_name: bacpipe-dashboard
+project_slug: bacpipe-dashboard
+repo_name: bacpipe-dashboard
+repo_org: ninanor
+template_type: python
+type_annotations: true
