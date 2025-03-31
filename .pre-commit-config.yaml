@@ -55,7 +55,7 @@ repos:
     -   id: detect-secrets
 
   - repo: https://github.com/fpgmaas/deptry.git
-    rev: "0.23.0"
+    rev: 0.23.0
     hooks:
       - id: deptry
         args: ["--ignore", "DEP001"]

@@ -20,5 +20,3 @@ uv install
 ```
 uv run streamlit src/main.py
 ```
-
-
