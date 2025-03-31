@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from pytorch_lightning.callbacks import Callback
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -68,63 +70,57 @@ class EmbeddingTransformerModule(pl.LightningModule):
         return optim.Adam(self.parameters(), lr=self.learning_rate)
 
 
+def prepare_embedding_data(embeddings, labels, test_size=0.2):
+
+    unique_labels = sorted(set(labels))
+    label_to_id = {label: i for i, label in enumerate(unique_labels)}
+    numeric_labels = np.array([label_to_id[label] for label in labels])
+
+    X_tensor = torch.FloatTensor(embeddings)
+    y_tensor = torch.LongTensor(numeric_labels)
+
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_tensor, y_tensor, test_size=test_size, stratify=y_tensor, random_state=42
+    )
+
+    return {
+        "X_train": X_train,
+        "X_val": X_val, 
+        "y_train": y_train,
+        "y_val": y_val,
+        "label_to_id": label_to_id,
+        "unique_labels": unique_labels,
+        "input_dim": embeddings.shape[1]
+    }
+
+
 def train_embedding_model(
     embeddings,
     labels,
+    test_size=0.2,
     hidden_dim=64,
     epochs=30,
     batch_size=32,
     learning_rate=0.001,
     progress_callback=None,
 ):
-    """
-    Train a simple neural network on embeddings to improve class separation
-    using PyTorch Lightning
-
-    Args:
-        embeddings: Original embeddings (numpy array)
-        labels: String labels for each embedding
-        hidden_dim: Size of the hidden layer
-        epochs: Number of training epochs
-        batch_size: Batch size for training
-        learning_rate: Learning rate for Adam optimizer
-        progress_callback: Optional callback function to report progress (epoch, total)
-
-    Returns:
-        model: Trained PyTorch Lightning model
-        label_to_id: Dictionary mapping label strings to numeric IDs
-    """
-    # Convert string labels to numeric IDs
-    unique_labels = sorted(set(labels))
-    label_to_id = {label: i for i, label in enumerate(unique_labels)}
-    numeric_labels = np.array([label_to_id[label] for label in labels])
-
-    # Convert to PyTorch tensors
-    X_tensor = torch.FloatTensor(embeddings)
-    y_tensor = torch.LongTensor(numeric_labels)
-
-    # Create train/val split
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_tensor, y_tensor, test_size=0.2, stratify=y_tensor, random_state=42
-    )
-
-    # Create data loaders
-    train_dataset = TensorDataset(X_train, y_train)
-    val_dataset = TensorDataset(X_val, y_val)
+    
+    data = prepare_embedding_data(embeddings, labels, test_size)
+    
+    train_dataset = TensorDataset(data["X_train"], data["y_train"])
+    val_dataset = TensorDataset(data["X_val"], data["y_val"])
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size)
 
-    # Create model
-    input_dim = embeddings.shape[1]
-    num_classes = len(unique_labels)
+    input_dim = data["input_dim"]
+    num_classes = len(data["unique_labels"])
     model = EmbeddingTransformerModule(
         input_dim, hidden_dim, num_classes, learning_rate
     )
+    
+    callbacks = [ProgressBarCallback(progress_callback),
+                 EarlyStopping(monitor="val_loss", min_delta=0.00, patience=3, verbose=False, mode="min")]
 
-    # Create progress callback
-    callbacks = [ProgressBarCallback(progress_callback)]
-
-    # Create trainer and train
     trainer = pl.Trainer(
         max_epochs=epochs,
         enable_progress_bar=False,
@@ -133,10 +129,9 @@ def train_embedding_model(
         callbacks=callbacks,
     )
 
-    # Train the model
     trainer.fit(model, train_loader, val_loader)
 
-    return model, label_to_id
+    return model, data["label_to_id"]
 
 
 def get_transformed_embeddings(model, embeddings):

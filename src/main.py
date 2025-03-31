@@ -54,7 +54,7 @@ def display_original_embeddings(embeddings, labels, perplexity):
     return original_features_2d
 
 
-def display_transformed_embeddings(embeddings, labels, perplexity, hidden_dim, epochs):
+def display_transformed_embeddings(embeddings, labels, perplexity, hidden_dim, epochs, test_size):
     with st.status(
         "Training neural network for better cluster separation..."
     ) as status:
@@ -66,6 +66,7 @@ def display_transformed_embeddings(embeddings, labels, perplexity, hidden_dim, e
         model, label_to_id = train_embedding_model(
             embeddings,
             labels,
+            test_size=test_size,
             hidden_dim=hidden_dim,
             epochs=epochs,
             progress_callback=update_progress,
@@ -133,16 +134,17 @@ def setup_sidebar():
     if selected_model in model_info:
         st.sidebar.info(model_info[selected_model])
 
-    # TSNE settings - not sure if really useful
-    st.sidebar.header("Visualization Settings")
-    perplexity = st.sidebar.slider("TSNE Perplexity", 5, 50, 8)
+    # Test size settings
+    st.sidebar.header("Data parameters")
+    test_size = st.sidebar.slider("Validation Split", 0.0, 1.0, 0.2, 0.05)
+
 
     # Neural network settings
     st.sidebar.header("Neural Network Settings")
     hidden_dim = st.sidebar.slider("Hidden Layer Dimension", 2, 512, 256)
     epochs = st.sidebar.slider("Training Epochs", 10, 100, 10)
 
-    return selected_model, perplexity, hidden_dim, epochs
+    return selected_model, test_size, hidden_dim, epochs
 
 
 @hydra.main(version_base=None, config_path="../", config_name="config")
@@ -150,7 +152,7 @@ def main(cfg):
     st.title("Audio Embedding Visualization Dashboard")
 
     # SIDEBAR CONTROLS
-    selected_model, perplexity, hidden_dim, epochs = setup_sidebar()
+    selected_model, test_size, hidden_dim, epochs = setup_sidebar()
 
     # PATH SETTINGS
     data_dir = pathlib.Path(cfg.DATA_DIR)
@@ -182,8 +184,8 @@ def main(cfg):
         )
 
     display_embedding_info(embeddings, labels)
-    display_original_embeddings(embeddings, labels, perplexity)
-    display_transformed_embeddings(embeddings, labels, perplexity, hidden_dim, epochs)
+    display_original_embeddings(embeddings, labels, perplexity=8)
+    display_transformed_embeddings(embeddings, labels, 8, hidden_dim, epochs, test_size)
 
 
 if __name__ == "__main__":
