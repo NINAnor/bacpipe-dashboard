@@ -20,6 +20,9 @@ def calculate_clustering_metrics(embeddings, labels):
 
     return {"ari": ari, "ami": ami}
 
+
+# This function tells how clusterable embeddings are — i.e., how well they preserve class information without supervision.
+
 def calculate_classification_metrics(embeddings, true_labels):
 
     if isinstance(true_labels[0], str):

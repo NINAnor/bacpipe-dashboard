@@ -1,1 +1,2 @@
-DATA_DIR: "/home/benjamin.cretois/data/esc50/ESC-50-master"
+DATA_DIR: "/home/benjamin.cretois/data/esc50/ESC-50-master" # path to the audio dataset
+METADATA_PATH: "/home/benjamin.cretois/data/esc50/ESC-50-master/meta/esc50.csv" # path to the metadata file

@@ -1,6 +1,7 @@
 import pathlib
 
 import hydra
+from hydra.core.global_hydra import GlobalHydra
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -282,16 +283,15 @@ def summary_dashboard(transf_embeddings, transf_metrics, proto_embeddings, proto
     st.plotly_chart(fig, use_container_width=True)
 
 
-#@hydra.main(version_base=None, config_path="../", config_name="config")
-def main():
+def run_dashboard(cfg):
     st.title("Audio Embedding Visualization Dashboard")
 
     # SIDEBAR CONTROLS
     selected_model, test_size, hidden_dim, epochs = setup_sidebar()
 
     # PATH SETTINGS
-    data_dir = "/home/benjamin.cretois/data/esc50/ESC-50-master"
-    metadata_path = "/home/benjamin.cretois/data/esc50/ESC-50-master/meta/esc50.csv"
+    data_dir = cfg["DATA_DIR"]
+    metadata_path = cfg["METADATA_PATH"]
 
     # GENERATE THE EMBEDDINGS
     with st.status(
@@ -336,5 +336,23 @@ def main():
 
     summary_dashboard(transf_embeddings, transf_metrics, proto_embeddings, proto_metrics, original_embeddings, original_metrics, val_data["y"])
 
+def reset_hydra_config():
+    if GlobalHydra.instance().is_initialized():
+        GlobalHydra.instance().clear()
+
+# Use this decorator pattern to safely work with Hydra
+@hydra.main(version_base=None, config_path="../", config_name="config")
+def _main(cfg):
+    # Store config in session state for persistence
+    if 'config' not in st.session_state:
+        st.session_state['config'] = {
+            'DATA_DIR': cfg.get('DATA_DIR', ''),
+            'METADATA_PATH': cfg.get('METADATA_PATH', '')
+        }
+    
+    # Call your actual main function with the config
+    run_dashboard(st.session_state['config'])
+
 if __name__ == "__main__":
-    main()
+    reset_hydra_config()
+    _main()
