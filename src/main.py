@@ -2,7 +2,6 @@ import pathlib
 
 import hydra
 import streamlit as st
-
 import numpy as np
 
 from fine_tune_embeddings import get_transformed_embeddings, train_embedding_model
@@ -10,15 +9,18 @@ from utils.figures_utils import get_2d_features, get_figure
 from utils.metrics import calculate_clustering_metrics
 from utils.path_utils import generate_embeddings, load_embeddings_with_labels
 from proto_network import train_proto_network, get_proto_transformed_embeddings
+from utils.data_utils import split_data, prepare_embedding_data
 
 
-def display_embedding_info(embeddings, labels):
+
+
+def display_embedding_info(embeddings, labels, is_validation=False):
     """Display basic information about the embeddings"""
-    st.write(f"Embedding shape: {embeddings.shape}")
+    dataset_type = "Validation" if is_validation else "Full"
+    st.write(f"{dataset_type} Embedding shape: {embeddings.shape}")
     unique_labels = set(labels)
     st.write(f"Number of classes: {len(unique_labels)}")
     st.write(f"Classes: {', '.join(sorted(unique_labels))}")
-
 
 def display_original_embeddings(embeddings, labels, perplexity):
     with st.status("Computing 2D embeddings with t-SNE...") as status:
@@ -27,7 +29,7 @@ def display_original_embeddings(embeddings, labels, perplexity):
             label="t-SNE computation complete", state="complete", expanded=False
         )
 
-    st.header("Original Embeddings")
+    st.header("Original Embeddings (Validation Set)")
 
     # Calculate and display clustering metrics
     with st.status("Calculating clustering metrics..."):
@@ -55,75 +57,75 @@ def display_original_embeddings(embeddings, labels, perplexity):
 
     return original_features_2d
 
-
-def display_transformed_embeddings(embeddings, labels, perplexity, hidden_dim, epochs, test_size):
+def display_transformed_embeddings(train_embeddings, train_labels, val_embeddings, val_labels, label_to_id, perplexity, hidden_dim, epochs):
     with st.status(
         "Training neural network for better cluster separation..."
     ) as status:
-        progress_bar = st.progress(0)
 
-        def update_progress(epoch, total):
-            progress_bar.progress(epoch / total)
-
-        model, label_to_id = train_embedding_model(
-            embeddings,
-            labels,
-            test_size=test_size,
+        model = train_embedding_model(
+            train_embeddings,
+            train_labels,
+            val_embeddings,
+            val_labels,
             hidden_dim=hidden_dim,
             epochs=epochs,
-            progress_callback=update_progress,
         )
 
-        t_embeddings = get_transformed_embeddings(model, embeddings)
-        progress_bar.empty()
+        # Transform only validation embeddings
+        t_embeddings = get_transformed_embeddings(model, val_embeddings)
+
         status.update(
-            label=f"Neural network trained! New embedding shape: {t_embeddings.shape}",
+            label=f"Neural network trained! Validation embedding shape: {t_embeddings.shape}",
             state="complete",
             expanded=False,
         )
 
-    with st.status("Computing t-SNE for transformed embeddings...") as status:
+    with st.status("Computing t-SNE for transformed validation embeddings...") as status:
         transformed_features_2d = get_2d_features(t_embeddings, perplexity)
         status.update(
             label="t-SNE computation complete", state="complete", expanded=False
         )
 
-    st.header("Transformed Embeddings")
+    st.header("Transformed Embeddings (Validation Set)")
+
+    id_to_label = {v: k for k, v in label_to_id.items()}
+    plot_labels = [id_to_label[val.item()] for val in val_labels]
 
     with st.status("Calculating clustering metrics..."):
-        metrics = calculate_clustering_metrics(t_embeddings, labels)
-        st.info(f"Metrics - ARI: {metrics['ari']:.2f},AMI: {metrics['ami']:.4f}")
+        metrics = calculate_clustering_metrics(t_embeddings, plot_labels)
+        st.info(f"Metrics - ARI: {metrics['ari']:.2f}, AMI: {metrics['ami']:.4f}")
 
-    fig_transformed = get_figure(transformed_features_2d, labels)
+
+
+    fig_transformed = get_figure(transformed_features_2d, plot_labels)
     st.plotly_chart(fig_transformed, use_container_width=True)
 
     return t_embeddings, transformed_features_2d
 
-def display_proto_embeddings(embeddings, labels, perplexity, hidden_dim, epochs):
-    """Process and display embeddings transformed with a prototypical network"""
+def display_proto_embeddings(train_embeddings, train_labels, val_embeddings, val_labels, label_to_id, perplexity, hidden_dim, epochs):
+    """Process and display embeddings transformed with a prototypical network (validation set only)"""
     with st.status("Training prototypical network for better separation...") as status:
-        progress_bar = st.progress(0)
-        
-        def update_progress(epoch, total):
-            progress_bar.progress(epoch / total)
-        
-        model, label_to_id, prototypes = train_proto_network(
-            embeddings, 
-            labels,
+
+        # Train model with prepared tensors
+        model, _, prototypes = train_proto_network(
+            train_embeddings, 
+            train_labels,
+            val_embeddings,
+            val_labels,
             embedding_dim=hidden_dim,
             epochs=epochs,
-            progress_callback=update_progress
         )
         
-        proto_embeddings = get_proto_transformed_embeddings(model, embeddings)
-        progress_bar.empty()
+        # Transform only validation embeddings
+        proto_embeddings = get_proto_transformed_embeddings(model, val_embeddings)
+
         status.update(
-            label=f"Prototypical network trained! New embedding shape: {proto_embeddings.shape}",
+            label=f"Prototypical network trained! Validation embedding shape: {proto_embeddings.shape}",
             state="complete",
             expanded=False,
         )
     
-    with st.status("Computing t-SNE for prototypical embeddings...") as status:
+    with st.status("Computing t-SNE for prototypical validation embeddings...") as status:
         transformed_features_2d = get_2d_features(proto_embeddings, perplexity)
         status.update(
             label="t-SNE computation complete", 
@@ -131,22 +133,25 @@ def display_proto_embeddings(embeddings, labels, perplexity, hidden_dim, epochs)
             expanded=False
         )
     
-    st.header("Prototypical Network Embeddings")
+    st.header("Prototypical Network Embeddings (Validation Set)")
     
-    # Calculate and display clustering metrics
+
+    id_to_label = {v: k for k, v in label_to_id.items()}
+    plot_labels = [id_to_label[val.item()] for val in val_labels]
+
     with st.status("Calculating clustering metrics..."):
-        metrics = calculate_clustering_metrics(proto_embeddings, labels)
+        metrics = calculate_clustering_metrics(proto_embeddings, plot_labels)
         st.info(f"Embedding Quality Metrics - ARI: {metrics['ari']:.4f}, AMI: {metrics['ami']:.4f}")
     
-    fig_transformed = get_figure(transformed_features_2d, labels)
+
+    fig_transformed = get_figure(transformed_features_2d, plot_labels)
     st.plotly_chart(fig_transformed, use_container_width=True)
     
-    # Optionally visualize the prototypes
+    # SHOW THE CLASS PROTOTYPES 
+    # TODO: doesn't work
     if st.checkbox("Show Class Prototypes"):
         st.write("Class Prototypes Visualization")
-        # Get prototype embeddings for visualization
-        unique_labels = sorted(set(labels))
-        label_to_id = {label: i for i, label in enumerate(unique_labels)}
+        unique_labels = sorted(set(train_labels))
         prototype_embeddings = np.array([prototypes[label_to_id[label]].detach().numpy() for label in unique_labels])
         
         # Create t-SNE for prototypes
@@ -154,8 +159,6 @@ def display_proto_embeddings(embeddings, labels, perplexity, hidden_dim, epochs)
             proto_2d = get_2d_features(prototype_embeddings, perplexity)
             proto_fig = get_figure(proto_2d, unique_labels, "Class Prototypes")
             st.plotly_chart(proto_fig, use_container_width=True)
-    
-    return proto_embeddings, transformed_features_2d
 
 
 def setup_sidebar():
@@ -188,7 +191,6 @@ def setup_sidebar():
         "perch_bird": "PERCH Bird - Bird sound classification model made by Naturalis",
         "vggish": "VGGish - Google's audio classification model",
         "audiomae": "AudioMAE - Self-supervised audio model",
-        # TODO: add more model information
     }
 
     if selected_model in model_info:
@@ -196,8 +198,7 @@ def setup_sidebar():
 
     # Test size settings
     st.sidebar.header("Data parameters")
-    test_size = st.sidebar.slider("Validation Split", 0.0, 1.0, 0.2, 0.05)
-
+    test_size = st.sidebar.slider("Validation Split", 0.1, 0.5, 0.2, 0.05)
 
     # Neural network settings
     st.sidebar.header("Neural Network Settings")
@@ -243,10 +244,23 @@ def main(cfg):
             expanded=False,
         )
 
-    display_embedding_info(embeddings, labels)
-    display_original_embeddings(embeddings, labels, perplexity=8)
-    display_transformed_embeddings(embeddings, labels, 8, hidden_dim, epochs, test_size)
-    display_proto_embeddings(embeddings, labels, 8, hidden_dim, epochs)
+    # Split data into train and validation sets
+    with st.status(f"Splitting data into train ({1-test_size:.0%}) and validation ({test_size:.0%}) sets..."):
+        X_train, X_val, y_train, y_val = split_data(embeddings, labels, test_size)
+        st.success(f"Train set: {len(y_train)} samples, Validation set: {len(y_val)} samples")
+    
+    train_data = prepare_embedding_data(X_train, y_train)
+    val_data = prepare_embedding_data(X_val, y_val)
+
+    # Display information about the validation set
+    display_embedding_info(X_val, y_val, is_validation=True)
+    
+    # Display original embeddings (validation only)
+    display_original_embeddings(X_val, y_val, perplexity=8)
+    
+    # Train models on training set, display results on validation set
+    display_transformed_embeddings(train_data["X"], train_data["y"], val_data["X"], val_data["y"], val_data["label_to_id"], 8, hidden_dim, epochs)
+    display_proto_embeddings(train_data["X"], train_data["y"], val_data["X"], val_data["y"], val_data["label_to_id"], 8, hidden_dim, epochs)
 
 
 if __name__ == "__main__":
