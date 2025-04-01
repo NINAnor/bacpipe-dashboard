@@ -34,7 +34,8 @@ dependencies = [
   "flax==0.10.0",
   "tensorflow-hub==0.16.1",
   "torchaudio==2.4.1",
-  "lightning>=2.5.1"
+  "lightning>=2.5.1",
+  "easyfsl>=1.5.0",
 ]
 description = ""
 license = {text = "GPL-3.0+"}
