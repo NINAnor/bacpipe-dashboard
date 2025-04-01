@@ -3,10 +3,13 @@ import pathlib
 import hydra
 import streamlit as st
 
+import numpy as np
+
 from fine_tune_embeddings import get_transformed_embeddings, train_embedding_model
 from utils.figures_utils import get_2d_features, get_figure
 from utils.metrics import calculate_clustering_metrics
 from utils.path_utils import generate_embeddings, load_embeddings_with_labels
+from proto_network import train_proto_network, get_proto_transformed_embeddings
 
 
 def display_embedding_info(embeddings, labels):
@@ -18,7 +21,6 @@ def display_embedding_info(embeddings, labels):
 
 
 def display_original_embeddings(embeddings, labels, perplexity):
-    """Process and display the original embeddings with quality metrics"""
     with st.status("Computing 2D embeddings with t-SNE...") as status:
         original_features_2d = get_2d_features(embeddings, perplexity)
         status.update(
@@ -96,6 +98,64 @@ def display_transformed_embeddings(embeddings, labels, perplexity, hidden_dim, e
     st.plotly_chart(fig_transformed, use_container_width=True)
 
     return t_embeddings, transformed_features_2d
+
+def display_proto_embeddings(embeddings, labels, perplexity, hidden_dim, epochs):
+    """Process and display embeddings transformed with a prototypical network"""
+    with st.status("Training prototypical network for better separation...") as status:
+        progress_bar = st.progress(0)
+        
+        def update_progress(epoch, total):
+            progress_bar.progress(epoch / total)
+        
+        model, label_to_id, prototypes = train_proto_network(
+            embeddings, 
+            labels,
+            embedding_dim=hidden_dim,
+            epochs=epochs,
+            progress_callback=update_progress
+        )
+        
+        proto_embeddings = get_proto_transformed_embeddings(model, embeddings)
+        progress_bar.empty()
+        status.update(
+            label=f"Prototypical network trained! New embedding shape: {proto_embeddings.shape}",
+            state="complete",
+            expanded=False,
+        )
+    
+    with st.status("Computing t-SNE for prototypical embeddings...") as status:
+        transformed_features_2d = get_2d_features(proto_embeddings, perplexity)
+        status.update(
+            label="t-SNE computation complete", 
+            state="complete", 
+            expanded=False
+        )
+    
+    st.header("Prototypical Network Embeddings")
+    
+    # Calculate and display clustering metrics
+    with st.status("Calculating clustering metrics..."):
+        metrics = calculate_clustering_metrics(proto_embeddings, labels)
+        st.info(f"Embedding Quality Metrics - ARI: {metrics['ari']:.4f}, AMI: {metrics['ami']:.4f}")
+    
+    fig_transformed = get_figure(transformed_features_2d, labels)
+    st.plotly_chart(fig_transformed, use_container_width=True)
+    
+    # Optionally visualize the prototypes
+    if st.checkbox("Show Class Prototypes"):
+        st.write("Class Prototypes Visualization")
+        # Get prototype embeddings for visualization
+        unique_labels = sorted(set(labels))
+        label_to_id = {label: i for i, label in enumerate(unique_labels)}
+        prototype_embeddings = np.array([prototypes[label_to_id[label]].detach().numpy() for label in unique_labels])
+        
+        # Create t-SNE for prototypes
+        if prototype_embeddings.shape[0] > 1:  # Only if we have multiple prototypes
+            proto_2d = get_2d_features(prototype_embeddings, perplexity)
+            proto_fig = get_figure(proto_2d, unique_labels, "Class Prototypes")
+            st.plotly_chart(proto_fig, use_container_width=True)
+    
+    return proto_embeddings, transformed_features_2d
 
 
 def setup_sidebar():
@@ -186,6 +246,7 @@ def main(cfg):
     display_embedding_info(embeddings, labels)
     display_original_embeddings(embeddings, labels, perplexity=8)
     display_transformed_embeddings(embeddings, labels, 8, hidden_dim, epochs, test_size)
+    display_proto_embeddings(embeddings, labels, 8, hidden_dim, epochs)
 
 
 if __name__ == "__main__":

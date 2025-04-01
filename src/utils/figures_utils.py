@@ -90,3 +90,46 @@ def get_figure(features_2d, labels, fig_name=None):
         )
 
     return fig
+
+
+def get_prototype_figure(features_2d, labels, prototypes_2d, prototype_labels):
+    """Create a figure showing both data points and class prototypes"""
+    
+    # Create DataFrame for data points
+    df_data = pd.DataFrame({
+        "x": features_2d[:, 0], 
+        "y": features_2d[:, 1], 
+        "label": labels,
+        "type": "Data point"
+    })
+    
+    # Create DataFrame for prototypes
+    df_proto = pd.DataFrame({
+        "x": prototypes_2d[:, 0],
+        "y": prototypes_2d[:, 1],
+        "label": prototype_labels,
+        "type": "Prototype"
+    })
+    
+    # Combine the DataFrames
+    df = pd.concat([df_data, df_proto])
+    
+    # Create the figure
+    fig = px.scatter(
+        df,
+        x="x",
+        y="y",
+        color="label",
+        symbol="type",
+        height=600,
+        title="Embeddings with Class Prototypes",
+        labels={"x": "Dimension 1", "y": "Dimension 2", "label": "Sound Category"}
+    )
+    
+    # Make prototypes larger
+    fig.update_traces(
+        selector=dict(mode='markers', name='Prototype'),
+        marker=dict(size=15, line=dict(width=2, color='DarkSlateGrey'))
+    )
+    
+    return fig
