@@ -3,10 +3,13 @@ import pathlib
 import hydra
 import streamlit as st
 import numpy as np
+import pandas as pd
+
+import plotly.express as px
 
 from fine_tune_embeddings import get_transformed_embeddings, train_embedding_model
 from utils.figures_utils import get_2d_features, get_figure
-from utils.metrics import calculate_clustering_metrics
+from utils.metrics import calculate_clustering_metrics, calculate_classification_metrics
 from utils.path_utils import generate_embeddings, load_embeddings_with_labels
 from proto_network import train_proto_network, get_proto_transformed_embeddings
 from utils.data_utils import split_data, prepare_embedding_data
@@ -55,7 +58,7 @@ def display_original_embeddings(embeddings, labels, perplexity):
     fig_original = get_figure(original_features_2d, labels)
     st.plotly_chart(fig_original, use_container_width=True)
 
-    return original_features_2d
+    return original_features_2d, metrics
 
 def display_transformed_embeddings(train_embeddings, train_labels, val_embeddings, val_labels, label_to_id, perplexity, hidden_dim, epochs):
     with st.status(
@@ -100,7 +103,7 @@ def display_transformed_embeddings(train_embeddings, train_labels, val_embedding
     fig_transformed = get_figure(transformed_features_2d, plot_labels)
     st.plotly_chart(fig_transformed, use_container_width=True)
 
-    return t_embeddings, transformed_features_2d
+    return t_embeddings, metrics
 
 def display_proto_embeddings(train_embeddings, train_labels, val_embeddings, val_labels, label_to_id, perplexity, hidden_dim, epochs):
     """Process and display embeddings transformed with a prototypical network (validation set only)"""
@@ -147,19 +150,7 @@ def display_proto_embeddings(train_embeddings, train_labels, val_embeddings, val
     fig_transformed = get_figure(transformed_features_2d, plot_labels)
     st.plotly_chart(fig_transformed, use_container_width=True)
     
-    # SHOW THE CLASS PROTOTYPES 
-    # TODO: doesn't work
-    if st.checkbox("Show Class Prototypes"):
-        st.write("Class Prototypes Visualization")
-        unique_labels = sorted(set(train_labels))
-        prototype_embeddings = np.array([prototypes[label_to_id[label]].detach().numpy() for label in unique_labels])
-        
-        # Create t-SNE for prototypes
-        if prototype_embeddings.shape[0] > 1:  # Only if we have multiple prototypes
-            proto_2d = get_2d_features(prototype_embeddings, perplexity)
-            proto_fig = get_figure(proto_2d, unique_labels, "Class Prototypes")
-            st.plotly_chart(proto_fig, use_container_width=True)
-
+    return proto_embeddings, metrics
 
 def setup_sidebar():
     AVAILABLE_MODELS = [
@@ -208,15 +199,98 @@ def setup_sidebar():
     return selected_model, test_size, hidden_dim, epochs
 
 
-@hydra.main(version_base=None, config_path="../", config_name="config")
-def main(cfg):
+def summary_dashboard(transf_embeddings, transf_metrics, proto_embeddings, proto_metrics, original_embeddings, original_metrics, y_val):
+
+    original_class_metrics = calculate_classification_metrics(original_embeddings, y_val)
+    transf_class_metrics = calculate_classification_metrics(transf_embeddings, y_val)
+    proto_class_metrics = calculate_classification_metrics(proto_embeddings, y_val)
+    
+    # Combine metrics
+    original_metrics.update(original_class_metrics)
+    transf_metrics.update(transf_class_metrics)
+    proto_metrics.update(proto_class_metrics)
+    
+    # Display metrics comparison
+    st.header("Embedding Methods Comparison")
+    
+    metrics_df = pd.DataFrame({
+        'Metric': ['ARI', 'AMI', 'Accuracy', 'F1 Score'],
+        'Original Embeddings': [
+            f"{original_metrics['ari']:.4f}", 
+            f"{original_metrics['ami']:.4f}",
+            f"{original_metrics['accuracy']:.4f}",
+            f"{original_metrics['f1']:.4f}"
+        ],
+        'Fine-tuned Embeddings': [
+            f"{transf_metrics['ari']:.4f}", 
+            f"{transf_metrics['ami']:.4f}",
+            f"{transf_metrics['accuracy']:.4f}",
+            f"{transf_metrics['f1']:.4f}"
+        ],
+        'Prototypical Networks': [
+            f"{proto_metrics['ari']:.4f}", 
+            f"{proto_metrics['ami']:.4f}",
+            f"{proto_metrics['accuracy']:.4f}",
+            f"{proto_metrics['f1']:.4f}"
+        ]
+    })
+    
+    st.table(metrics_df)
+    
+    # Create a bar chart comparing the methods
+    st.subheader("Visual Comparison")
+    
+    chart_data = pd.DataFrame({
+        'Metric': ['ARI', 'AMI', 'Accuracy', 'F1 Score'] * 3,
+        'Value': [
+            original_metrics['ari'], original_metrics['ami'], 
+            original_metrics['accuracy'], original_metrics['f1'],
+            transf_metrics['ari'], transf_metrics['ami'], 
+            transf_metrics['accuracy'], transf_metrics['f1'],
+            proto_metrics['ari'], proto_metrics['ami'], 
+            proto_metrics['accuracy'], proto_metrics['f1']
+        ],
+        'Method': ['Original'] * 4 + ['Fine-tuning'] * 4 + ['Prototypical'] * 4
+    })
+    
+    fig = px.bar(
+        chart_data,
+        x='Metric',
+        y='Value',
+        color='Method',
+        barmode='group',
+        title='Comparison of Embedding Methods',
+        height=500,
+        color_discrete_map={
+            'Original': '#636EFA',     # Blue
+            'Fine-tuning': '#EF553B',  # Red/orange
+            'Prototypical': '#00CC96'  # Green
+        }
+    )
+    
+    fig.update_layout(
+        yaxis_title='Score',
+        legend=dict(
+            orientation='h', 
+            yanchor='bottom', 
+            y=1.02,        
+            xanchor='right', 
+            x=1
+        )
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+#@hydra.main(version_base=None, config_path="../", config_name="config")
+def main():
     st.title("Audio Embedding Visualization Dashboard")
 
     # SIDEBAR CONTROLS
     selected_model, test_size, hidden_dim, epochs = setup_sidebar()
 
     # PATH SETTINGS
-    data_dir = pathlib.Path(cfg.DATA_DIR)
+    data_dir = "/home/benjamin.cretois/data/esc50/ESC-50-master"
     metadata_path = "/home/benjamin.cretois/data/esc50/ESC-50-master/meta/esc50.csv"
 
     # GENERATE THE EMBEDDINGS
@@ -244,7 +318,7 @@ def main(cfg):
             expanded=False,
         )
 
-    # Split data into train and validation sets
+    # SPLIT THE DATASET
     with st.status(f"Splitting data into train ({1-test_size:.0%}) and validation ({test_size:.0%}) sets..."):
         X_train, X_val, y_train, y_val = split_data(embeddings, labels, test_size)
         st.success(f"Train set: {len(y_train)} samples, Validation set: {len(y_val)} samples")
@@ -252,16 +326,15 @@ def main(cfg):
     train_data = prepare_embedding_data(X_train, y_train)
     val_data = prepare_embedding_data(X_val, y_val)
 
-    # Display information about the validation set
+    # Display info about the validation set
     display_embedding_info(X_val, y_val, is_validation=True)
+    original_embeddings, original_metrics = display_original_embeddings(X_val, y_val, perplexity=8)
     
-    # Display original embeddings (validation only)
-    display_original_embeddings(X_val, y_val, perplexity=8)
-    
-    # Train models on training set, display results on validation set
-    display_transformed_embeddings(train_data["X"], train_data["y"], val_data["X"], val_data["y"], val_data["label_to_id"], 8, hidden_dim, epochs)
-    display_proto_embeddings(train_data["X"], train_data["y"], val_data["X"], val_data["y"], val_data["label_to_id"], 8, hidden_dim, epochs)
+    # Train the model using the "vanilla" and "prototypical" pipeline
+    transf_embeddings, transf_metrics = display_transformed_embeddings(train_data["X"], train_data["y"], val_data["X"], val_data["y"], val_data["label_to_id"], 8, hidden_dim, epochs)
+    proto_embeddings, proto_metrics = display_proto_embeddings(train_data["X"], train_data["y"], val_data["X"], val_data["y"], val_data["label_to_id"], 8, hidden_dim, epochs)
 
+    summary_dashboard(transf_embeddings, transf_metrics, proto_embeddings, proto_metrics, original_embeddings, original_metrics, val_data["y"])
 
 if __name__ == "__main__":
     main()
