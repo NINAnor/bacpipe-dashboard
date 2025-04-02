@@ -50,7 +50,7 @@ def calculate_classification_metrics(embeddings, true_labels):
         unique_vals = sorted(np.unique(true_numeric).tolist())
         class_names = [str(i) for i in unique_vals]
 
-    # Create K-means cluster with same number of clusters as classes
+    # K-means cluster
     n_clusters = len(set(true_numeric))
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     cluster_labels = kmeans.fit_predict(embeddings)
