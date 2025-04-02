@@ -9,7 +9,7 @@ import pandas as pd
 import plotly.express as px
 
 from fine_tune_embeddings import get_transformed_embeddings, train_embedding_model
-from utils.figures_utils import get_2d_features, get_figure
+from utils.figures_utils import get_2d_features, get_figure, plot_confusion_matrix
 from utils.metrics import calculate_clustering_metrics, calculate_classification_metrics
 from utils.path_utils import generate_embeddings, load_embeddings_with_labels
 from proto_network import train_proto_network, get_proto_transformed_embeddings
@@ -281,6 +281,38 @@ def summary_dashboard(transf_embeddings, transf_metrics, proto_embeddings, proto
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
+    # Add confusion matrices section
+    st.header("Confusion Matrices")
+    
+    cm_tabs = st.tabs(["Original", "Fine-tuned", "Prototypical"])
+    
+    with cm_tabs[0]:
+        st.write("### Original Embeddings Confusion Matrix")
+        cm_fig_original = plot_confusion_matrix(
+            original_metrics["cm"],
+            original_metrics["class_names"],
+            title="Original Embeddings"
+        )
+        st.plotly_chart(cm_fig_original, use_container_width=True)
+            
+    with cm_tabs[1]:
+        st.write("### Fine-tuned Embeddings Confusion Matrix")
+        cm_fig_t = plot_confusion_matrix(
+            transf_metrics["cm"], 
+            transf_metrics["class_names"],
+            title="Fine-tuned Embeddings"
+        )
+        st.plotly_chart(cm_fig_t, use_container_width=True)
+            
+    with cm_tabs[2]:
+        st.write("### Prototypical Network Confusion Matrix")
+        cm_fig = plot_confusion_matrix(
+            proto_metrics["cm"],
+            proto_metrics["class_names"],
+            title="Prototypical Network"
+        )
+        st.plotly_chart(cm_fig, use_container_width=True)
 
 
 def run_dashboard(cfg):
