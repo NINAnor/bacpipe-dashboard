@@ -15,6 +15,12 @@ Once you have installed `uv`, install the required packages:
 uv install
 ```
 
+## Download the ESC50 dataset and change the path in the config file
+
+Download the [Environmental Sound Classification dataset](https://github.com/karoldvl/ESC-50/archive/master.zip) and unzip the file in the location of your choice.
+
+Then, open the `config.yaml` file and change the path for `DATA_DIR` and `METADATA_PATH` according to the location you chose to save the dataset.
+
 ## Run the dashboard
 
 ```

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.figure_factory as ff
 from sklearn.manifold import TSNE
 
 
@@ -87,6 +88,88 @@ def get_figure(features_2d, labels, fig_name=None):
                 x=1.05,
                 title=dict(text="Sound Category"),
             )
+        )
+
+    return fig
+
+
+def get_prototype_figure(features_2d, labels, prototypes_2d, prototype_labels):
+    """Create a figure showing both data points and class prototypes"""
+
+    # Create DataFrame for data points
+    df_data = pd.DataFrame(
+        {
+            "x": features_2d[:, 0],
+            "y": features_2d[:, 1],
+            "label": labels,
+            "type": "Data point",
+        }
+    )
+
+    # Create DataFrame for prototypes
+    df_proto = pd.DataFrame(
+        {
+            "x": prototypes_2d[:, 0],
+            "y": prototypes_2d[:, 1],
+            "label": prototype_labels,
+            "type": "Prototype",
+        }
+    )
+
+    # Combine the DataFrames
+    df = pd.concat([df_data, df_proto])
+
+    # Create the figure
+    fig = px.scatter(
+        df,
+        x="x",
+        y="y",
+        color="label",
+        symbol="type",
+        height=600,
+        title="Embeddings with Class Prototypes",
+        labels={"x": "Dimension 1", "y": "Dimension 2", "label": "Sound Category"},
+    )
+
+    # Make prototypes larger
+    fig.update_traces(
+        selector=dict(mode="markers", name="Prototype"),
+        marker=dict(size=15, line=dict(width=2, color="DarkSlateGrey")),
+    )
+
+    return fig
+
+
+def plot_confusion_matrix(cm, class_names, title="Confusion Matrix"):
+    print(f"Confusion matrix shape: {cm.shape}")
+    print(f"Number of class names: {len(class_names)}")
+    # Normalize the confusion matrix
+    cm_norm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
+    cm_norm = np.nan_to_num(cm_norm)  # Replace NaNs with 0s
+
+    # Create the heatmap
+    fig = ff.create_annotated_heatmap(
+        z=cm_norm,
+        x=class_names,
+        y=class_names,
+        annotation_text=cm.astype(int),  # Show the raw counts as integers
+        colorscale="Viridis",
+    )
+
+    # Add title and adjust layout
+    fig.update_layout(
+        title_text=title,
+        xaxis=dict(title="Predicted Class"),
+        yaxis=dict(
+            title="True Class", autorange="reversed"
+        ),  # Reverse to match sklearn's orientation
+    )
+
+    # If there are many classes, hide the axis labels
+    if len(class_names) > 15:
+        fig.update_layout(
+            xaxis=dict(showticklabels=False, title="Predicted Class"),
+            yaxis=dict(showticklabels=False, title="True Class", autorange="reversed"),
         )
 
     return fig
