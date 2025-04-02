@@ -1,12 +1,8 @@
-import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-
-from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, TensorDataset
 
 
@@ -64,27 +60,29 @@ def train_embedding_model(
     batch_size=32,
     learning_rate=0.001,
     progress_callback=None,
-    num_classes=None
+    num_classes=None,
 ):
-
     train_dataset = TensorDataset(train_X, train_y)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    
+
     val_dataset = TensorDataset(val_X, val_y)
     val_loader = DataLoader(val_dataset, batch_size=batch_size)
-    
+
     if num_classes is None:
         num_classes = len(torch.unique(train_y))
-    
+
     # Get the shape of the embeddings and create the model
     input_dim = train_X.shape[1]
     model = EmbeddingTransformerModule(
         input_dim, hidden_dim, num_classes, learning_rate
     )
-    
-    callbacks = [EarlyStopping(monitor="val_loss", min_delta=0.00, patience=3, verbose=False, mode="min")
+
+    callbacks = [
+        EarlyStopping(
+            monitor="val_loss", min_delta=0.00, patience=3, verbose=False, mode="min"
+        )
     ]
-    
+
     trainer = pl.Trainer(
         max_epochs=epochs,
         enable_progress_bar=False,
@@ -92,11 +90,11 @@ def train_embedding_model(
         logger=False,
         callbacks=callbacks,
         accelerator="cpu",
-        devices=1
+        devices=1,
     )
-    
+
     trainer.fit(model, train_loader, val_loader)
-    
+
     return model
 
 

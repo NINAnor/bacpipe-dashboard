@@ -243,31 +243,40 @@ name = "bacpipe-dashboard"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "absl-py" },
     { name = "apache-beam" },
+    { name = "audioread" },
     { name = "django-environ" },
     { name = "easyfsl" },
     { name = "etils" },
     { name = "flax" },
+    { name = "h5py" },
     { name = "hydra-core" },
-    { name = "importlib-resources" },
     { name = "jax" },
-    { name = "keras" },
     { name = "librosa" },
-    { name = "lightning" },
-    { name = "llvmlite" },
+    { name = "matplotlib" },
     { name = "ml-collections" },
-    { name = "ml-dtypes" },
+    { name = "numpy" },
+    { name = "omegaconf" },
+    { name = "packaging" },
+    { name = "pandas" },
     { name = "plotly" },
-    { name = "resampy" },
+    { name = "pyarrow" },
+    { name = "pytorch-lightning" },
+    { name = "pyyaml" },
+    { name = "requests" },
     { name = "scikit-learn" },
-    { name = "seaborn" },
+    { name = "scipy" },
+    { name = "soundfile" },
     { name = "streamlit" },
     { name = "tensorflow" },
     { name = "tensorflow-hub" },
-    { name = "tflite" },
+    { name = "tf-keras" },
     { name = "timm" },
+    { name = "torch" },
     { name = "torchaudio" },
-    { name = "wget" },
+    { name = "torchmetrics" },
+    { name = "tqdm" },
 ]
 
 [package.dev-dependencies]
@@ -278,31 +287,40 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "absl-py", specifier = ">=2.2.0" },
     { name = "apache-beam", specifier = "==2.62.0" },
+    { name = "audioread", specifier = ">=3.0.1" },
     { name = "django-environ" },
     { name = "easyfsl", specifier = ">=1.5.0" },
     { name = "etils", specifier = "==1.9.4" },
     { name = "flax", specifier = "==0.10.0" },
+    { name = "h5py", specifier = ">=3.13.0" },
     { name = "hydra-core", specifier = ">=1.3.2" },
-    { name = "importlib-resources", specifier = "==6.4.5" },
     { name = "jax", specifier = "==0.4.33" },
-    { name = "keras", specifier = "<3.0.0" },
     { name = "librosa", specifier = "==0.10.2.post1" },
-    { name = "lightning", specifier = ">=2.5.1" },
-    { name = "llvmlite", specifier = "==0.43.0" },
+    { name = "matplotlib", specifier = ">=3.10.1" },
     { name = "ml-collections", specifier = "==1.0.0" },
-    { name = "ml-dtypes", specifier = "==0.3.2" },
+    { name = "numpy", specifier = ">=1.26.4" },
+    { name = "omegaconf", specifier = ">=2.3.0" },
+    { name = "packaging", specifier = ">=24.2" },
+    { name = "pandas", specifier = ">=2.2.3" },
     { name = "plotly", specifier = ">=6.0.1" },
-    { name = "resampy", specifier = "==0.4.3" },
+    { name = "pyarrow", specifier = ">=16.1.0" },
+    { name = "pytorch-lightning", specifier = ">=2.5.1" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "requests", specifier = ">=2.32.3" },
     { name = "scikit-learn", specifier = ">=1.6.1" },
-    { name = "seaborn", specifier = "==0.13.2" },
+    { name = "scipy", specifier = ">=1.15.2" },
+    { name = "soundfile", specifier = ">=0.13.1" },
     { name = "streamlit", specifier = ">=1.43.2" },
     { name = "tensorflow", specifier = "==2.15.1" },
     { name = "tensorflow-hub", specifier = "==0.16.1" },
-    { name = "tflite", specifier = "==2.10.0" },
+    { name = "tf-keras", specifier = ">=2.15.1" },
     { name = "timm", specifier = "==1.0.13" },
+    { name = "torch", specifier = ">=2.4.1" },
     { name = "torchaudio", specifier = "==2.4.1" },
-    { name = "wget", specifier = "==3.2" },
+    { name = "torchmetrics", specifier = ">=1.7.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -1385,26 +1403,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/0e/2d/77783a52641a21ff7e2230aa588e4fb4a61422a64673096a36776b7e5bd9/librosa-0.10.2.post1.tar.gz", hash = "sha256:cd99f16717cbcd1e0983e37308d1db46a6f7dfc2e396e5a9e61e6821e44bd2e7", size = 325533 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8c/8a/2d231b35456506b7c98b3ab9bbf07917b205fed8615d2e59e976ab497fff/librosa-0.10.2.post1-py3-none-any.whl", hash = "sha256:dc882750e8b577a63039f25661b7e39ec4cfbacc99c1cffba666cd664fb0a7a0", size = 260089 },
-]
-
-[[package]]
-name = "lightning"
-version = "2.5.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "fsspec", extra = ["http"] },
-    { name = "lightning-utilities" },
-    { name = "packaging" },
-    { name = "pytorch-lightning" },
-    { name = "pyyaml" },
-    { name = "torch" },
-    { name = "torchmetrics" },
-    { name = "tqdm" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/39/53/21a834e03317d04cc3db7307d4c19af94c0db43b9001e8fabb8d150c5e69/lightning-2.5.1.tar.gz", hash = "sha256:aca88f8abf3fc38d8b40c1f82ce481f4379c2b181a6eeeb9217db0aba8e40736", size = 630918 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/80/eb/45f6629b92cb4ed38854d5b76f9f668ff58404a4b9ec1abefa98502afd98/lightning-2.5.1-py3-none-any.whl", hash = "sha256:512cbf9e80859f331b329536b2e2f90776e6f8a399048745bb4dabacc36e2850", size = 818892 },
 ]
 
 [[package]]
@@ -2793,19 +2791,6 @@ wheels = [
 ]
 
 [[package]]
-name = "resampy"
-version = "0.4.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numba" },
-    { name = "numpy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/29/f1/34be702a69a5d272e844c98cee82351f880985cfbca0cc86378011078497/resampy-0.4.3.tar.gz", hash = "sha256:a0d1c28398f0e55994b739650afef4e3974115edbe96cd4bb81968425e916e47", size = 3080604 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4d/b9/3b00ac340a1aab3389ebcc52c779914a44aadf7b0cb7a3bf053195735607/resampy-0.4.3-py3-none-any.whl", hash = "sha256:ad2ed64516b140a122d96704e32bc0f92b23f45419e8b8f478e5a05f83edcebd", size = 3076529 },
-]
-
-[[package]]
 name = "rich"
 version = "13.9.4"
 source = { registry = "https://pypi.org/simple" }
@@ -3030,20 +3015,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/03/f3/e699e19cabe96bbac5189c04aaa970718f0105cff03d458dc5e2b6bd1e8c/scipy-1.15.2-cp313-cp313t-musllinux_1_2_aarch64.whl", hash = "sha256:bae43364d600fdc3ac327db99659dcb79e6e7ecd279a75fe1266669d9a652828", size = 36545159 },
     { url = "https://files.pythonhosted.org/packages/af/f5/ab3838e56fe5cc22383d6fcf2336e48c8fe33e944b9037fbf6cbdf5a11f8/scipy-1.15.2-cp313-cp313t-musllinux_1_2_x86_64.whl", hash = "sha256:f031846580d9acccd0044efd1a90e6f4df3a6e12b4b6bd694a7bc03a89892b28", size = 39136566 },
     { url = "https://files.pythonhosted.org/packages/0a/c8/b3f566db71461cabd4b2d5b39bcc24a7e1c119535c8361f81426be39bb47/scipy-1.15.2-cp313-cp313t-win_amd64.whl", hash = "sha256:fe8a9eb875d430d81755472c5ba75e84acc980e4a8f6204d402849234d3017db", size = 40477705 },
-]
-
-[[package]]
-name = "seaborn"
-version = "0.13.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "pandas" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/86/59/a451d7420a77ab0b98f7affa3a1d78a313d2f7281a57afb1a34bae8ab412/seaborn-0.13.2.tar.gz", hash = "sha256:93e60a40988f4d65e9f4885df477e2fdaff6b73a9ded434c1ab356dd57eefff7", size = 1457696 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/83/11/00d3c3dfc25ad54e731d91449895a79e4bf2384dc3ac01809010ba88f6d5/seaborn-0.13.2-py3-none-any.whl", hash = "sha256:636f8336facf092165e27924f223d3c62ca560b1f2bb5dff7ab7fad265361987", size = 294914 },
 ]
 
 [[package]]
@@ -3341,19 +3312,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/03/a3/72e49c210fe545159c98842f110f024195f8efefc2e310f8eac77e3d599e/tf_keras-2.15.1.tar.gz", hash = "sha256:40ab605cecc7759c657cb2bccd9efaacd6fc2369a6c1eba8053890afeac46886", size = 1251021 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6f/23/6fd9aab5b7ef9e5614b94edce48d92db9d38d2bd2d00ef2c7a6f82a00588/tf_keras-2.15.1-py3-none-any.whl", hash = "sha256:8beaef46b8b4f1158de1410e7c0cf82f008b9e8c4ab3443f54ac1aaef9c2ad74", size = 1715031 },
-]
-
-[[package]]
-name = "tflite"
-version = "2.10.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "flatbuffers" },
-    { name = "numpy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/0d/a8/8e84e361b77733157e04bac54b1479f877f3185cdc0dbbc412823fbfc7c8/tflite-2.10.0.tar.gz", hash = "sha256:6818a5d7776958b803944ba0a1f4c4395559606d9e795d67ac467a8a3904757d", size = 37960 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/92/8d/20f655ab797c65613edcfc7354a80f288444f561c419bc638fe501c5f292/tflite-2.10.0-py2.py3-none-any.whl", hash = "sha256:89cb9f57df0f5345f8fad1381e0fae6180ded687113eb552cfbb60a05edc002c", size = 123566 },
 ]
 
 [[package]]
@@ -3663,12 +3621,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/9f/69/83029f1f6300c5fb2
 wheels = [
     { url = "https://files.pythonhosted.org/packages/52/24/ab44c871b0f07f491e5d2ad12c9bd7358e527510618cb1b803a88e986db1/werkzeug-3.1.3-py3-none-any.whl", hash = "sha256:54b78bf3716d19a65be4fceccc0d1d7b89e608834989dfae50ea87564639213e", size = 224498 },
 ]
-
-[[package]]
-name = "wget"
-version = "3.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/47/6a/62e288da7bcda82b935ff0c6cfe542970f04e29c756b0e147251b2fb251f/wget-3.2.zip", hash = "sha256:35e630eca2aa50ce998b9b1a127bb26b30dfee573702782aa982f875e3f16061", size = 10857 }
 
 [[package]]
 name = "wheel"
