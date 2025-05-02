@@ -4,6 +4,10 @@ import plotly.express as px
 import streamlit as st
 from hydra.core.global_hydra import GlobalHydra
 
+from streamlit_plotly_events import plotly_events
+
+import os
+
 from fine_tune_embeddings import get_transformed_embeddings, train_embedding_model
 from proto_network import get_proto_transformed_embeddings, train_proto_network
 from utils.data_utils import prepare_embedding_data, split_data
@@ -11,6 +15,34 @@ from utils.figures_utils import get_2d_features, get_figure, plot_confusion_matr
 from utils.metrics import calculate_classification_metrics, calculate_clustering_metrics
 from utils.path_utils import generate_embeddings, load_embeddings_with_labels
 
+
+# Update all caching functions that handle PyTorch tensors
+@st.cache_data
+def cached_tsne_features(_features, perplexity):
+    """Cache t-SNE computation"""
+    return get_2d_features(_features, perplexity)
+
+@st.cache_resource
+def cached_train_embedding_model(_train_embeddings, _train_labels, _val_embeddings, _val_labels, hidden_dim, epochs):
+    """Cache trained embedding model"""
+    return train_embedding_model(_train_embeddings, _train_labels, _val_embeddings, _val_labels, 
+                                 hidden_dim=hidden_dim, epochs=epochs)
+
+@st.cache_resource
+def cached_train_proto_network(_train_embeddings, _train_labels, _val_embeddings, _val_labels, hidden_dim, epochs):
+    """Cache trained prototypical network"""
+    return train_proto_network(_train_embeddings, _train_labels, _val_embeddings, _val_labels, 
+                              embedding_dim=hidden_dim, epochs=epochs)
+
+@st.cache_data
+def cached_split_data(_embeddings, _labels, _files, test_size):
+    """Cache data splitting"""
+    return split_data(_embeddings, _labels, _files, test_size)
+
+@st.cache_data(ttl=3600)
+def cached_load_embeddings(embed_dir, metadata_path, model_name):
+    """Cache embedding loading - no tensors in arguments so no changes needed"""
+    return load_embeddings_with_labels(embed_dir, metadata_path, model_name=model_name)
 
 def display_embedding_info(embeddings, labels, is_validation=False):
     """Display basic information about the embeddings"""
@@ -21,40 +53,66 @@ def display_embedding_info(embeddings, labels, is_validation=False):
     st.write(f"Classes: {', '.join(sorted(unique_labels))}")
 
 
-def display_original_embeddings(embeddings, labels, perplexity):
+def display_original_embeddings(embeddings, labels, file_paths, perplexity):
+    # Initialize session state for audio playback
+    if "audio_files" not in st.session_state:
+        st.session_state.audio_files = file_paths
+        st.session_state.current_audio = None
+        st.session_state.selected_point = None
+        
     with st.status("Computing 2D embeddings with t-SNE...") as status:
         original_features_2d = get_2d_features(embeddings, perplexity)
-        status.update(
-            label="t-SNE computation complete", state="complete", expanded=False
-        )
+        status.update(label="t-SNE computation complete", state="complete", expanded=False)
 
     st.header("Original Embeddings (Validation Set)")
+    
+    # Calculate metrics
+    metrics = calculate_clustering_metrics(embeddings, labels)
+    st.info(f"Metrics - ARI: {metrics['ari']:.4f}, AMI: {metrics['ami']:.2f}")
 
-    # Calculate and display clustering metrics
-    with st.status("Calculating clustering metrics..."):
-        metrics = calculate_clustering_metrics(embeddings, labels)
-        st.info(f"Metrics - ARI: {metrics['ari']:.4f}, AMI: {metrics['ami']:.2f}")
+    # Create a DataFrame with all the data
+    df = pd.DataFrame({
+        "x": original_features_2d[:, 0],
+        "y": original_features_2d[:, 1], 
+        "label": labels,
+        "file_path": file_paths
+    })
+    
+    # Create interactive plot
+    fig = px.scatter(
+        df, x="x", y="y", color="label", 
+        hover_data=["label", "file_path"],
+        title="Click on a point to play the audio"
+    )
+    
+    # Display the plot and capture clicks
+    selected_point = plotly_events(fig, click_event=True, override_height=600)
+    
+    # Handle audio playback when a point is clicked
+    if selected_point:
+        # Get the index of the clicked point
+        x, y = selected_point[0]["x"], selected_point[0]["y"]
+        closest_point = ((df["x"] - x)**2 + (df["y"] - y)**2).idxmin()
+        
+        # Get the file path and play the audio
+        audio_file = df.loc[closest_point, "file_path"]
+        
+        # Update session state
+        if st.session_state.current_audio != audio_file:
+            st.session_state.current_audio = audio_file
+            st.session_state.selected_point = closest_point
+            
+            # Create columns for audio player and info
+            col1, col2 = st.columns([2, 3])
+            
+            with col1:
+                st.audio(audio_file, format="audio/wav")
+                
+            with col2:
+                st.markdown(f"**File:** `{os.path.basename(audio_file)}`")
+                st.markdown(f"**Category:** {df.loc[closest_point, 'label']}")
 
-    # Explanation of metrics
-    with st.expander("What do these metrics mean?"):
-        st.markdown("""
-        **ARI (Adjusted Rand Index)**: Measures the similarity between the clustering
-                    from embeddings and the true labels.
-        - Ranges from -0.5 to 1.0
-        - 1.0 means perfect agreement between clusters and labels
-        - 0 means random clustering
-        - Negative values indicate worse than random clustering
-
-        **AMI (Adjusted Mutual Information)**: Measures the information shared
-                    between clusters and true labels.
-        - Ranges from 0 to 1.0
-        - Higher values indicate better correspondence between clusters and true classes
-        """)
-
-    fig_original = get_figure(original_features_2d, labels)
-    st.plotly_chart(fig_original, use_container_width=True)
-
-    return original_features_2d, metrics
+    return embeddings, metrics
 
 
 def display_transformed_embeddings(
@@ -66,44 +124,37 @@ def display_transformed_embeddings(
     perplexity,
     hidden_dim,
     epochs,
+    model=None,  # Add option to pass pre-trained model
 ):
-    with st.status(
-        "Training neural network for better cluster separation..."
-    ) as status:
-        model = train_embedding_model(
-            train_embeddings,
-            train_labels,
-            val_embeddings,
-            val_labels,
-            hidden_dim=hidden_dim,
-            epochs=epochs,
-        )
-
-        # Transform only validation embeddings
-        t_embeddings = get_transformed_embeddings(model, val_embeddings)
-
-        status.update(
-            label=f"NN trained! Validation embedding shape: {t_embeddings.shape}",
-            state="complete",
-            expanded=False,
-        )
-
-    with st.status(
-        "Computing t-SNE for transformed validation embeddings..."
-    ) as status:
-        transformed_features_2d = get_2d_features(t_embeddings, perplexity)
-        status.update(
-            label="t-SNE computation complete", state="complete", expanded=False
-        )
-
+    # Don't create another status if model is already provided
+    if model is None:
+        with st.status("Training neural network for better cluster separation...") as status:
+            model = train_embedding_model(
+                train_embeddings,
+                train_labels,
+                val_embeddings,
+                val_labels,
+                hidden_dim=hidden_dim,
+                epochs=epochs,
+            )
+            status.update(label="Neural network trained!", state="complete", expanded=False)
+    
+    # Transform embeddings
+    t_embeddings = get_transformed_embeddings(model, val_embeddings)
+    
+    st.write(f"Validation embedding shape: {t_embeddings.shape}")
+    
+    # Compute t-SNE separately without nesting status containers
+    transformed_features_2d = get_2d_features(t_embeddings, perplexity)
+    
     st.header("Transformed Embeddings (Validation Set)")
 
     id_to_label = {v: k for k, v in label_to_id.items()}
     plot_labels = [id_to_label[val.item()] for val in val_labels]
 
-    with st.status("Calculating clustering metrics..."):
-        metrics = calculate_clustering_metrics(t_embeddings, plot_labels)
-        st.info(f"Metrics - ARI: {metrics['ari']:.2f}, AMI: {metrics['ami']:.4f}")
+    # Calculate metrics without nested status
+    metrics = calculate_clustering_metrics(t_embeddings, plot_labels)
+    st.info(f"Metrics - ARI: {metrics['ari']:.2f}, AMI: {metrics['ami']:.4f}")
 
     fig_transformed = get_figure(transformed_features_2d, plot_labels)
     st.plotly_chart(fig_transformed, use_container_width=True)
@@ -120,46 +171,41 @@ def display_proto_embeddings(
     perplexity,
     hidden_dim,
     epochs,
+    model=None,  # Add option to pass pre-trained model
+    prototypes=None  # Add option to pass pre-computed prototypes
 ):
-    with st.status("Training prototypical network for better separation...") as status:
-        # Train model with prepared tensors
-        model, _, prototypes = train_proto_network(
-            train_embeddings,
-            train_labels,
-            val_embeddings,
-            val_labels,
-            embedding_dim=hidden_dim,
-            epochs=epochs,
-        )
-
-        # Transform only validation embeddings
-        proto_embeddings = get_proto_transformed_embeddings(model, val_embeddings)
-
-        status.update(
-            label=f"PN trained! Validation embedding shape: {proto_embeddings.shape}",
-            state="complete",
-            expanded=False,
-        )
-
-    with st.status(
-        "Computing t-SNE for prototypical validation embeddings..."
-    ) as status:
-        transformed_features_2d = get_2d_features(proto_embeddings, perplexity)
-        status.update(
-            label="t-SNE computation complete", state="complete", expanded=False
-        )
-
+    # Don't create another status if model is already provided
+    if model is None:
+        with st.status("Training prototypical network for better separation...") as status:
+            model, _, prototypes = train_proto_network(
+                train_embeddings,
+                train_labels,
+                val_embeddings,
+                val_labels,
+                embedding_dim=hidden_dim,
+                epochs=epochs,
+            )
+            status.update(label="Prototypical network trained!", state="complete", expanded=False)
+    
+    # Transform embeddings
+    proto_embeddings = get_proto_transformed_embeddings(model, val_embeddings)
+    
+    # Display shape info
+    st.write(f"Validation embedding shape: {proto_embeddings.shape}")
+    
+    # Compute t-SNE (without nesting status)
+    transformed_features_2d = get_2d_features(proto_embeddings, perplexity)
+    
     st.header("Prototypical Network Embeddings (Validation Set)")
 
     id_to_label = {v: k for k, v in label_to_id.items()}
     plot_labels = [id_to_label[val.item()] for val in val_labels]
 
-    with st.status("Calculating clustering metrics..."):
-        metrics = calculate_clustering_metrics(proto_embeddings, plot_labels)
-        st.info(
-            f"Embedding Metrics - ARI: {metrics['ari']:.4f}, AMI: {metrics['ami']:.4f}"
-        )
+    # Calculate metrics (without nesting status)
+    metrics = calculate_clustering_metrics(proto_embeddings, plot_labels)
+    st.info(f"Embedding Metrics - ARI: {metrics['ari']:.4f}, AMI: {metrics['ami']:.4f}")
 
+    # Create and display the figure
     fig_transformed = get_figure(transformed_features_2d, plot_labels)
     st.plotly_chart(fig_transformed, use_container_width=True)
 
@@ -347,85 +393,308 @@ def run_dashboard(cfg):
     # SIDEBAR CONTROLS
     selected_model, test_size, hidden_dim, epochs = setup_sidebar()
 
+    # Initialize parameter tracking
+    if 'last_params' not in st.session_state:
+        st.session_state.last_params = {
+            'model': selected_model,
+            'test_size': test_size,
+            'hidden_dim': hidden_dim,
+            'epochs': epochs
+        }
+
+    # Check which parameters changed
+    model_changed = selected_model != st.session_state.last_params['model']
+    test_size_changed = test_size != st.session_state.last_params['test_size']
+    hidden_dim_changed = hidden_dim != st.session_state.last_params['hidden_dim']
+    epochs_changed = epochs != st.session_state.last_params['epochs']
+
+    # Create tabs for different sections
+    data_tab, original_tab, finetune_tab, proto_tab, compare_tab = st.tabs([
+        "Data Loading", "Original Embeddings", "Fine-tuned", "Prototypical", "Comparison"
+    ])
+
     # PATH SETTINGS
     data_dir = cfg["DATA_DIR"]
     metadata_path = cfg["METADATA_PATH"]
 
-    # GENERATE THE EMBEDDINGS
-    with st.status(
-        f"Generating embeddings using {selected_model.upper()}..."
-    ) as status:
-        loader = generate_embeddings(
-            selected_model, data_dir, check_if_primary_combination_exists=True
-        )
-        embed_dir = loader.embed_dir
-        status.update(
-            label=f"Embeddings generated at {embed_dir}",
-            state="complete",
-            expanded=False,
-        )
+    # Update state with current parameters
+    st.session_state.last_params = {
+        'model': selected_model,
+        'test_size': test_size,
+        'hidden_dim': hidden_dim,
+        'epochs': epochs
+    }
 
-    # LOAD THE EMBEDDINGS
-    with st.status("Loading embeddings and matching labels...") as status:
-        embeddings, labels, file_paths = load_embeddings_with_labels(
-            embed_dir, metadata_path, model_name=selected_model
-        )
-        status.update(
-            label=f"Loaded {len(labels)} embeddings from {selected_model}",
-            state="complete",
-            expanded=False,
-        )
+    # DATA LOADING TAB - Always runs when model or test_size changes
+    with data_tab:
+        # GENERATE THE EMBEDDINGS - Cache with model
+        if 'embeddings' not in st.session_state or model_changed:
+            with st.status(f"Generating embeddings using {selected_model.upper()}...") as status:
+                loader = generate_embeddings(selected_model, data_dir, check_if_primary_combination_exists=True)
+                embed_dir = loader.embed_dir
+                
+                # Load with caching
+                embeddings, labels, embedding_paths = cached_load_embeddings(embed_dir, metadata_path, selected_model)
+                
+                # Map to audio files
+                metadata_df = pd.read_csv(metadata_path)
+                audio_files = []
+                for path in embedding_paths:
+                    filename = os.path.basename(path).split('.')[0]
+                    matches = metadata_df[metadata_df['filename'].str.contains(filename, case=False, na=False)]
+                    
+                    if len(matches) > 0:
+                        audio_path = os.path.join(data_dir, 'audio', f"{matches['filename'].iloc[0]}.wav")
+                        audio_files.append(audio_path)
+                    else:
+                        audio_files.append(path)
+                
+                st.session_state.embeddings = embeddings
+                st.session_state.labels = labels
+                st.session_state.audio_files = audio_files
+                
+                status.update(label=f"Loaded {len(labels)} embeddings", state="complete", expanded=False)
+        else:
+            embeddings = st.session_state.embeddings
+            labels = st.session_state.labels
+            audio_files = st.session_state.audio_files
+            st.success(f"Using cached embeddings for {selected_model} ({len(labels)} samples)")
 
-    # SPLIT THE DATASET
-    with st.status(
-        f"Splitting data into train ({1 - test_size:.0%}) and"
-        f"validation ({test_size:.0%}) sets..."
-    ):
-        X_train, X_val, y_train, y_val = split_data(embeddings, labels, test_size)
-        st.success(
-            f"Train set: {len(y_train)} samples, Validation set: {len(y_val)} samples"
-        )
+        # SPLIT DATA - Recompute when test_size changes
+        if 'train_val_split' not in st.session_state or model_changed or test_size_changed:
+            with st.status(f"Splitting data with {test_size:.0%} validation set..."):
+                X_train, X_val, y_train, y_val, train_files, val_files = cached_split_data(
+                    embeddings, labels, audio_files, test_size
+                )
+                
+                train_data = prepare_embedding_data(X_train, y_train)
+                val_data = prepare_embedding_data(X_val, y_val)
+                
+                st.session_state.train_val_split = {
+                    'X_train': X_train, 'X_val': X_val, 
+                    'y_train': y_train, 'y_val': y_val,
+                    'train_files': train_files, 'val_files': val_files,
+                    'train_data': train_data, 'val_data': val_data
+                }
+                
+                st.success(f"Train: {len(y_train)} samples, Validation: {len(y_val)} samples")
+        else:
+            split_data = st.session_state.train_val_split
+            X_train, X_val = split_data['X_train'], split_data['X_val']
+            y_train, y_val = split_data['y_train'], split_data['y_val']
+            train_files, val_files = split_data['train_files'], split_data['val_files']
+            train_data, val_data = split_data['train_data'], split_data['val_data']
+            st.success(f"Using cached data split (Train: {len(y_train)}, Val: {len(y_val)})")
 
-    train_data = prepare_embedding_data(X_train, y_train)
-    val_data = prepare_embedding_data(X_val, y_val)
+    with original_tab:
+        if 'train_val_split' not in st.session_state:
+            st.warning("Please load data first by clicking the 'Data Loading' tab")
+        else:
+            # Access data from session state
+            split_data = st.session_state.train_val_split
+            X_val, y_val = split_data['X_val'], split_data['y_val']
+            val_files = split_data['val_files']
+            
+            # Only recompute if model or test_size changed
+            if 'original_results' not in st.session_state or model_changed or test_size_changed:
+                display_embedding_info(X_val, y_val, is_validation=True)
+                original_embeddings, original_metrics = display_original_embeddings(
+                    X_val, y_val, val_files, perplexity=8
+                )
+                st.session_state.original_results = {
+                    'embeddings': original_embeddings,
+                    'metrics': original_metrics
+                }
+            else:
+                # Just redisplay without recomputing
+                display_embedding_info(X_val, y_val, is_validation=True)
+                st.info("Using cached original embeddings visualization")
+                
+                # Get data from session state
+                original_embeddings = st.session_state.original_results['embeddings']
+                metrics = st.session_state.original_results['metrics']
+                
+                # Redisplay metrics
+                st.info(f"Metrics - ARI: {metrics['ari']:.4f}, AMI: {metrics['ami']:.2f}")
+                
+                # Recalculate visualization (quick operation)
+                original_features_2d = cached_tsne_features(original_embeddings, 8)
+                
+                # Create a DataFrame for the plot
+                df = pd.DataFrame({
+                    "x": original_features_2d[:, 0],
+                    "y": original_features_2d[:, 1], 
+                    "label": y_val,
+                    "file_path": val_files
+                })
+                
+                # Interactive plot
+                fig = px.scatter(
+                    df, x="x", y="y", color="label", 
+                    hover_data=["label", "file_path"],
+                    title="Click on a point to play the audio"
+                )
+                
+                # Display plot and handle clicks
+                selected_point = plotly_events(fig, click_event=True, override_height=600)
+                
+                # Audio playback (same as in display_original_embeddings)
+                if selected_point:
+                    x, y = selected_point[0]["x"], selected_point[0]["y"]
+                    closest_point = ((df["x"] - x)**2 + (df["y"] - y)**2).idxmin()
+                    audio_file = df.loc[closest_point, "file_path"]
+                    
+                    # Create columns for audio player and info
+                    col1, col2 = st.columns([2, 3])
+                    with col1:
+                        st.audio(audio_file, format="audio/wav")
+                    with col2:
+                        st.markdown(f"**File:** `{os.path.basename(audio_file)}`")
+                        st.markdown(f"**Category:** {df.loc[closest_point, 'label']}")
 
-    # Display info about the validation set
-    display_embedding_info(X_val, y_val, is_validation=True)
-    original_embeddings, original_metrics = display_original_embeddings(
-        X_val, y_val, perplexity=8
-    )
+    # FINE-TUNED EMBEDDINGS TAB
+    with finetune_tab:
+        if 'train_val_split' not in st.session_state:
+            st.warning("Please load data first by clicking the 'Data Loading' tab")
+        else:
+            # Access data from session state
+            split_data = st.session_state.train_val_split
+            train_data = split_data['train_data']
+            val_data = split_data['val_data']
+            
+            # Determine if recomputation is needed
+            relevant_changed = model_changed or test_size_changed or hidden_dim_changed or epochs_changed
+            
+            if 'finetune_results' not in st.session_state or relevant_changed:
+                # First train model without nested status
+                with st.status("Training neural network..."):
+                    model = cached_train_embedding_model(
+                        train_data["X"], train_data["y"], 
+                        val_data["X"], val_data["y"], 
+                        hidden_dim, epochs
+                    )
+                
+                # Then display embeddings without nested status
+                transf_embeddings, transf_metrics = display_transformed_embeddings(
+                    train_data["X"], train_data["y"], 
+                    val_data["X"], val_data["y"],
+                    val_data["label_to_id"], 8, hidden_dim, epochs,
+                    model=model  # Pass the pre-trained model
+                )
+                
+                # Store results in session state
+                st.session_state.finetune_results = {
+                    'embeddings': transf_embeddings,
+                    'metrics': transf_metrics,
+                    'model': model
+                }
+            else:
+                # Use cached results
+                st.info("Using cached fine-tuned embeddings")
+                
+                # Get data from session state
+                transf_embeddings = st.session_state.finetune_results['embeddings']
+                metrics = st.session_state.finetune_results['metrics']
+                
+                # Display header and metrics
+                st.header("Transformed Embeddings (Validation Set)")
+                st.info(f"Metrics - ARI: {metrics['ari']:.2f}, AMI: {metrics['ami']:.4f}")
+                
+                # Get labels for plotting
+                id_to_label = {v: k for k, v in val_data["label_to_id"].items()}
+                plot_labels = [id_to_label[val.item()] for val in val_data["y"]]
+                
+                # Recalculate visualization
+                transformed_features_2d = cached_tsne_features(transf_embeddings, 8)
+                fig_transformed = get_figure(transformed_features_2d, plot_labels)
+                st.plotly_chart(fig_transformed, use_container_width=True)
 
-    # Train the model using the "vanilla" and "prototypical" pipeline
-    transf_embeddings, transf_metrics = display_transformed_embeddings(
-        train_data["X"],
-        train_data["y"],
-        val_data["X"],
-        val_data["y"],
-        val_data["label_to_id"],
-        8,
-        hidden_dim,
-        epochs,
-    )
-    proto_embeddings, proto_metrics = display_proto_embeddings(
-        train_data["X"],
-        train_data["y"],
-        val_data["X"],
-        val_data["y"],
-        val_data["label_to_id"],
-        8,
-        hidden_dim,
-        epochs,
-    )
+    # PROTOTYPICAL NETWORK TAB
+    with proto_tab:
+        if 'train_val_split' not in st.session_state:
+            st.warning("Please load data first by clicking the 'Data Loading' tab")
+        else:
+            # Access data from session state
+            split_data = st.session_state.train_val_split
+            train_data = split_data['train_data']
+            val_data = split_data['val_data']
+            
+            # Determine if recomputation is needed
+            relevant_changed = model_changed or test_size_changed or hidden_dim_changed or epochs_changed
+            
+            if 'proto_results' not in st.session_state or relevant_changed:
+                # First train model without nested status
+                with st.status("Training prototypical network..."):
+                    model, _, prototypes = cached_train_proto_network(
+                        train_data["X"], train_data["y"], 
+                        val_data["X"], val_data["y"], 
+                        hidden_dim, epochs
+                    )
+                
+                # Then display embeddings without nested status
+                proto_embeddings, proto_metrics = display_proto_embeddings(
+                    train_data["X"], train_data["y"], 
+                    val_data["X"], val_data["y"],
+                    val_data["label_to_id"], 8, hidden_dim, epochs,
+                    model=model,  # Pass the pre-trained model
+                    prototypes=prototypes  # Pass the pre-computed prototypes
+                )
+                
+                # Store results in session state
+                st.session_state.proto_results = {
+                    'embeddings': proto_embeddings,
+                    'metrics': proto_metrics,
+                    'model': model,
+                    'prototypes': prototypes
+                }
+            else:
+                # Use cached results
+                st.info("Using cached prototypical network embeddings")
+                
+                # Get data from session state
+                proto_embeddings = st.session_state.proto_results['embeddings']
+                metrics = st.session_state.proto_results['metrics']
+                
+                # Display header and metrics
+                st.header("Prototypical Network Embeddings (Validation Set)")
+                st.info(f"Embedding Metrics - ARI: {metrics['ari']:.4f}, AMI: {metrics['ami']:.4f}")
+                
+                # Get labels for plotting
+                id_to_label = {v: k for k, v in val_data["label_to_id"].items()}
+                plot_labels = [id_to_label[val.item()] for val in val_data["y"]]
+                
+                # Recalculate visualization
+                transformed_features_2d = cached_tsne_features(proto_embeddings, 8)
+                fig_transformed = get_figure(transformed_features_2d, plot_labels)
+                st.plotly_chart(fig_transformed, use_container_width=True)
 
-    summary_dashboard(
-        transf_embeddings,
-        transf_metrics,
-        proto_embeddings,
-        proto_metrics,
-        original_embeddings,
-        original_metrics,
-        val_data["y"],
-    )
+    # COMPARISON TAB
+    with compare_tab:
+        if ('original_results' not in st.session_state or 
+            'finetune_results' not in st.session_state or 
+            'proto_results' not in st.session_state):
+            st.warning("Please complete all previous tabs before viewing comparison")
+        else:
+            # Get data from session state
+            original_embeddings = st.session_state.original_results['embeddings']
+            original_metrics = st.session_state.original_results['metrics']
+            
+            transf_embeddings = st.session_state.finetune_results['embeddings']
+            transf_metrics = st.session_state.finetune_results['metrics']
+            
+            proto_embeddings = st.session_state.proto_results['embeddings']
+            proto_metrics = st.session_state.proto_results['metrics']
+            
+            # Get labels
+            y_val = st.session_state.train_val_split['y_val']
+            
+            # Generate comparison
+            summary_dashboard(
+                transf_embeddings, transf_metrics,
+                proto_embeddings, proto_metrics,
+                original_embeddings, original_metrics,
+                y_val
+            )
 
 
 def reset_hydra_config():

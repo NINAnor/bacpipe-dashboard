@@ -9,13 +9,24 @@ def get_2d_features(features, perplexity=8):
     return TSNE(n_components=2, perplexity=perplexity).fit_transform(features)
 
 
-def get_figure(features_2d, labels, fig_name=None):
+def get_figure(features_2d, labels, file_paths=None, fig_name=None):
     # Create a DataFrame for plotting
-    df = pd.DataFrame({"x": features_2d[:, 0], "y": features_2d[:, 1], "label": labels})
+    data = {"x": features_2d[:, 0], "y": features_2d[:, 1], "label": labels}
+    
+    # Add file paths to the data if provided
+    if file_paths is not None:
+        data["file_path"] = file_paths
+    
+    df = pd.DataFrame(data)
 
     # Get unique labels and count them
     unique_labels = sorted(df["label"].unique())
     num_categories = len(unique_labels)
+
+    # Determine hover data fields
+    hover_data = ["label"]
+    if "file_path" in df.columns:
+        hover_data.append("file_path")
 
     if num_categories <= 10:
         # For few categories, use default color scheme
@@ -24,6 +35,7 @@ def get_figure(features_2d, labels, fig_name=None):
             x="x",
             y="y",
             color="label",
+            hover_data=hover_data,  # Add hover data
             height=600,
             title="ESC-50 Embeddings",
             labels={"x": "Dimension 1", "y": "Dimension 2", "label": "Sound Category"},
@@ -71,6 +83,7 @@ def get_figure(features_2d, labels, fig_name=None):
             x="x",
             y="y",
             color="label",
+            hover_data=hover_data,  # Add hover data
             color_discrete_map=color_map,
             height=600,
             title="ESC-50 Embeddings",
