@@ -7,7 +7,6 @@ from components.caching import cached_load_embeddings, cached_split_data
 from components.display import display_embedding_info
 
 def render(cfg, model_changed, test_size_changed):
-    """Render the Data Loading tab"""
     data_dir = cfg["DATA_DIR"]
     metadata_path = cfg["METADATA_PATH"]
     
@@ -34,7 +33,6 @@ def render(cfg, model_changed, test_size_changed):
                 else:
                     audio_files.append(path)
             
-            # Store in session state
             st.session_state.embeddings = embeddings
             st.session_state.labels = labels
             st.session_state.audio_files = audio_files
@@ -45,31 +43,22 @@ def render(cfg, model_changed, test_size_changed):
         embeddings = st.session_state.embeddings
         labels = st.session_state.labels
         audio_files = st.session_state.audio_files
-        st.success(f"Using cached embeddings ({len(labels)} samples)")
 
-    # SPLIT DATA - Recompute when test_size changes
-    if 'train_val_split' not in st.session_state or model_changed or test_size_changed:
-        with st.status(f"Splitting data..."):
-            test_size = st.session_state.last_params['test_size']
-            X_train, X_val, y_train, y_val, train_files, val_files = cached_split_data(
-                embeddings, labels, audio_files, test_size
-            )
-            
-            train_data = prepare_embedding_data(X_train, y_train)
-            val_data = prepare_embedding_data(X_val, y_val)
-            
-            st.session_state.train_val_split = {
-                'X_train': X_train, 'X_val': X_val, 
-                'y_train': y_train, 'y_val': y_val,
-                'train_files': train_files, 'val_files': val_files,
-                'train_data': train_data, 'val_data': val_data
-            }
-            
-            st.success(f"Train: {len(y_train)} samples, Validation: {len(y_val)} samples")
-        display_embedding_info(X_val, y_val, is_validation=True)
-    else:
-        split_data = st.session_state.train_val_split
-        X_train, X_val = split_data['X_train'], split_data['X_val']
-        y_train, y_val = split_data['y_train'], split_data['y_val']
-        st.success(f"Using cached data split (Train: {len(y_train)}, Val: {len(y_val)})")
-        display_embedding_info(X_val, y_val, is_validation=True)
+    with st.status(f"Splitting data..."):
+        test_size = st.session_state.last_params['test_size']
+        X_train, X_val, y_train, y_val, train_files, val_files = cached_split_data(
+            embeddings, labels, audio_files, test_size
+        )
+        
+        train_data = prepare_embedding_data(X_train, y_train)
+        val_data = prepare_embedding_data(X_val, y_val)
+        
+        st.session_state.train_val_split = {
+            'X_train': X_train, 'X_val': X_val, 
+            'y_train': y_train, 'y_val': y_val,
+            'train_files': train_files, 'val_files': val_files,
+            'train_data': train_data, 'val_data': val_data
+        }
+        
+        st.success(f"Train: {len(y_train)} samples, Validation: {len(y_val)} samples")
+    display_embedding_info(X_val, y_val, is_validation=True)

@@ -6,7 +6,6 @@ from utils.metrics import calculate_classification_metrics
 from utils.figures_utils import plot_confusion_matrix
 
 def render():
-    """Render the Comparison tab"""
     if ('original_results' not in st.session_state or 
         'finetune_results' not in st.session_state or 
         'proto_results' not in st.session_state):
@@ -26,7 +25,6 @@ def render():
     # Get labels
     y_val = st.session_state.train_val_split['y_val']
     
-    # Generate comparison dashboard
     summary_dashboard(
         transf_embeddings, transf_metrics,
         proto_embeddings, proto_metrics,
@@ -36,7 +34,7 @@ def render():
 
 def summary_dashboard(transf_embeddings, transf_metrics, proto_embeddings, 
                     proto_metrics, original_embeddings, original_metrics, y_val):
-    """Create a summary dashboard comparing all methods"""
+
     # Calculate classification metrics for each embedding type
     original_class_metrics = calculate_classification_metrics(original_embeddings, y_val)
     transf_class_metrics = calculate_classification_metrics(transf_embeddings, y_val)
@@ -109,9 +107,9 @@ def summary_dashboard(transf_embeddings, transf_metrics, proto_embeddings,
         title="Comparison of Embedding Methods",
         height=500,
         color_discrete_map={
-            "Original": "#636EFA",  # Blue
-            "Fine-tuning": "#EF553B",  # Red/orange
-            "Prototypical": "#00CC96",  # Green
+            "Original": "#636EFA",  
+            "Fine-tuning": "#EF553B",  
+            "Prototypical": "#00CC96",  
         },
     )
 
