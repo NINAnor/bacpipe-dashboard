@@ -2,8 +2,6 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
-# Import easyfsl components
 from easyfsl.methods import PrototypicalNetworks
 from easyfsl.samplers import TaskSampler
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
@@ -63,18 +61,15 @@ class ProtoNetworkModel(pl.LightningModule):
         self.embedding_dim = embedding_dim
         self.projection_dim = projection_dim
 
-        # Build the prototypical network with the provided backbone
         self.model = PrototypicalNetworks(self.backbone_model)
 
         self.save_hyperparameters(ignore=["backbone_model"])
 
-        # Metrics
         self.train_acc = Accuracy(task="multiclass", num_classes=self.n_way)
         self.valid_acc = Accuracy(task="multiclass", num_classes=self.n_way)
         self.train_f1 = F1Score(task="multiclass", num_classes=self.n_way)
         self.valid_f1 = F1Score(task="multiclass", num_classes=self.n_way)
 
-        # Store prototypes
         self.prototypes = None
 
     def forward(self, support_images, support_labels, query_images):
@@ -85,7 +80,6 @@ class ProtoNetworkModel(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         support_images, support_labels, query_images, query_labels, _ = batch
 
-        # Ensure tensors are on the correct device
         support_images = support_images.to(self.device)
         support_labels = support_labels.to(self.device)
         query_images = query_images.to(self.device)
@@ -121,7 +115,6 @@ class ProtoNetworkModel(pl.LightningModule):
         )
         val_loss = nn.functional.cross_entropy(classification_scores, query_labels)
 
-        # Metrics
         predicted_labels = torch.max(classification_scores, 1)[1]
         self.log("val_loss", val_loss, prog_bar=True)
         self.log(
@@ -129,7 +122,6 @@ class ProtoNetworkModel(pl.LightningModule):
         )
         self.log("val_f1", self.valid_f1(predicted_labels, query_labels), prog_bar=True)
 
-        # Store the prototypes
         self.prototypes = self.model.prototypes
 
         return val_loss
@@ -231,7 +223,7 @@ def train_proto_network(
     )
     trainer.fit(model, train_loader, val_loader)
 
-    # Get prototypes for all classes
+    # get prototypes for all classes
     all_data = torch.cat([train_X, val_X])
     all_labels = torch.cat([train_y, val_y])
 

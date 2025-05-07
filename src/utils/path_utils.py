@@ -1,4 +1,4 @@
-import os  # still needed for chdir
+import os
 import sys
 from pathlib import Path
 

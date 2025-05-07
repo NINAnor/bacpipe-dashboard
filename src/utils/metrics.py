@@ -57,22 +57,22 @@ def calculate_classification_metrics(embeddings, true_labels):
 
     # Remap cluster labels to match true labels
     remapped_labels = np.zeros_like(cluster_labels)
-    for i, j in zip(col_ind, row_ind):
+    for i, j in zip(col_ind, row_ind, strict=False):
         remapped_labels[cluster_labels == i] = j
 
     # Calculate metrics
     accuracy = accuracy_score(true_numeric, remapped_labels)
-    f1 = f1_score(true_numeric, remapped_labels, average='weighted')
-    
+    f1 = f1_score(true_numeric, remapped_labels, average="weighted")
+
     # Get all unique labels actually present in the data
     all_labels = sorted(np.union1d(np.unique(true_numeric), np.unique(remapped_labels)))
-    
+
     # Create remapped confusion matrix with explicitly calculated labels
     cm_remapped = confusion_matrix(true_numeric, remapped_labels, labels=all_labels)
 
     return {
-        "accuracy": accuracy, 
-        "f1": f1, 
+        "accuracy": accuracy,
+        "f1": f1,
         "cm": cm_remapped,  # Use the key 'cm' to match what's in summary_dashboard
-        "class_names": class_names
+        "class_names": class_names,
     }

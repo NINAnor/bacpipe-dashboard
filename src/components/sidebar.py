@@ -1,10 +1,24 @@
 import streamlit as st
 
+
 def setup_sidebar():
     AVAILABLE_MODELS = [
-        "birdnet", "perch_bird", "insect66", "rcl_fs_bsed", "aves_especies",
-        "biolingual", "protoclr", "surfperch", "animal2vec_xc", "avesecho_passt",
-        "birdaves_especies", "vggish", "google_whale", "audiomae", "hbdet", "mix2"
+        "birdnet",
+        "perch_bird",
+        "insect66",
+        "rcl_fs_bsed",
+        "aves_especies",
+        "biolingual",
+        "protoclr",
+        "surfperch",
+        "animal2vec_xc",
+        "avesecho_passt",
+        "birdaves_especies",
+        "vggish",
+        "google_whale",
+        "audiomae",
+        "hbdet",
+        "mix2",
     ]
 
     st.sidebar.header("Embedding Model")
