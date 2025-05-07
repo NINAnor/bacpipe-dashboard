@@ -12,11 +12,11 @@ def get_2d_features(features, perplexity=8):
 def get_figure(features_2d, labels, file_paths=None, fig_name=None):
     # Create a DataFrame for plotting
     data = {"x": features_2d[:, 0], "y": features_2d[:, 1], "label": labels}
-    
+
     # Add file paths to the data if provided
     if file_paths is not None:
         data["file_path"] = file_paths
-    
+
     df = pd.DataFrame(data)
 
     # Get unique labels and count them
@@ -154,8 +154,6 @@ def get_prototype_figure(features_2d, labels, prototypes_2d, prototype_labels):
 
 
 def plot_confusion_matrix(cm, class_names, title="Confusion Matrix"):
-    print(f"Confusion matrix shape: {cm.shape}")
-    print(f"Number of class names: {len(class_names)}")
     # Normalize the confusion matrix
     cm_norm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
     cm_norm = np.nan_to_num(cm_norm)  # Replace NaNs with 0s
